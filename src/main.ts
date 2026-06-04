@@ -17,12 +17,14 @@ async function bootstrap() {
 
   // Swagger setup
   const config = new DocumentBuilder()
-    .setTitle('Document Understanding API')
+    .setTitle('AI-Powered Test Design Platform API')
     .setDescription(
-      'AI-powered document processing service that extracts Requirements and Test Cases from enterprise documents using semantic chunking and classification via AWS Bedrock.',
+      'AI-powered document processing platform. Phases: (1) Document Processing, (2) Document Understanding & Analysis, (3) Clarification Generation, (4) Clarification Response Loop. Powered by AWS Bedrock Claude.',
     )
-    .setVersion('1.0.0')
+    .setVersion('2.0.0')
     .addTag('Documents', 'Document processing endpoints')
+    .addTag('Document Understanding', 'AI document analysis — modules, dependencies, risks, workflow')
+    .addTag('Clarifications', 'Clarification question generation and response loop')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -30,7 +32,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  logger.log(`Document Understanding Service running on port ${port}`);
+  logger.log(`AI Test Design Platform running on port ${port}`);
   logger.log(`Swagger docs available at http://localhost:${port}/api`);
 }
 
