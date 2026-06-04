@@ -15,5 +15,9 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./document.schema"), exports);
-__exportStar(require("./document-chunk.schema"), exports);
+__exportStar(require("./document-understanding.schema"), exports);
+__exportStar(require("./project-knowledge.schema"), exports);
+__exportStar(require("./clarifications.schema"), exports);
+__exportStar(require("./test-cases.schema"), exports);
+__exportStar(require("./agent-runs.schema"), exports);
 //# sourceMappingURL=index.js.map

@@ -17,6 +17,24 @@ class ProcessDocumentDto {
 exports.ProcessDocumentDto = ProcessDocumentDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
+        description: 'Unique identifier for the project',
+        example: 'PRJ_001',
+    }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], ProcessDocumentDto.prototype, "projectId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        description: 'Unique identifier for the analysis session',
+        example: 'SES_101',
+    }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], ProcessDocumentDto.prototype, "sessionId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
         description: 'Unique identifier for the document',
         example: 'DOC001',
     }),
@@ -51,4 +69,31 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], ProcessDocumentDto.prototype, "markdown", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'Optional filename override.',
+        example: 'requirements.md',
+    }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], ProcessDocumentDto.prototype, "fileName", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'Optional file type override.',
+        example: 'markdown',
+    }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], ProcessDocumentDto.prototype, "fileType", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'Optional uploader user reference.',
+        example: 'admin',
+    }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], ProcessDocumentDto.prototype, "uploadedBy", void 0);
 //# sourceMappingURL=process-document.dto.js.map

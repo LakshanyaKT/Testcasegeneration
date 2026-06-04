@@ -1,1 +1,1 @@
-export * from './chunk.interface';
+export * from './document.interface';

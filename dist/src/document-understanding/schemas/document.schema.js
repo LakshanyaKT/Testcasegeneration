@@ -16,41 +16,37 @@ let DocumentEntity = class DocumentEntity extends mongoose_2.Document {
 };
 exports.DocumentEntity = DocumentEntity;
 __decorate([
-    (0, mongoose_1.Prop)({ required: true, unique: true }),
+    (0, mongoose_1.Prop)({ required: true }),
     __metadata("design:type", String)
-], DocumentEntity.prototype, "documentId", void 0);
+], DocumentEntity.prototype, "projectId", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ required: true }),
     __metadata("design:type", String)
-], DocumentEntity.prototype, "originalMarkdown", void 0);
+], DocumentEntity.prototype, "sessionId", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ default: 'PROCESSED' }),
+    (0, mongoose_1.Prop)({ required: true }),
+    __metadata("design:type", String)
+], DocumentEntity.prototype, "fileName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ required: true }),
+    __metadata("design:type", String)
+], DocumentEntity.prototype, "fileType", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ required: true }),
+    __metadata("design:type", String)
+], DocumentEntity.prototype, "rawText", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ required: true }),
+    __metadata("design:type", String)
+], DocumentEntity.prototype, "uploadedBy", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ required: true }),
+    __metadata("design:type", Date)
+], DocumentEntity.prototype, "uploadedAt", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'UPLOADED' }),
     __metadata("design:type", String)
 ], DocumentEntity.prototype, "status", void 0);
-__decorate([
-    (0, mongoose_1.Prop)(),
-    __metadata("design:type", Number)
-], DocumentEntity.prototype, "totalChunks", void 0);
-__decorate([
-    (0, mongoose_1.Prop)(),
-    __metadata("design:type", Number)
-], DocumentEntity.prototype, "requirementChunks", void 0);
-__decorate([
-    (0, mongoose_1.Prop)(),
-    __metadata("design:type", Number)
-], DocumentEntity.prototype, "testCaseChunks", void 0);
-__decorate([
-    (0, mongoose_1.Prop)(),
-    __metadata("design:type", Number)
-], DocumentEntity.prototype, "unknownChunks", void 0);
-__decorate([
-    (0, mongoose_1.Prop)(),
-    __metadata("design:type", Date)
-], DocumentEntity.prototype, "createdAt", void 0);
-__decorate([
-    (0, mongoose_1.Prop)(),
-    __metadata("design:type", Date)
-], DocumentEntity.prototype, "updatedAt", void 0);
 exports.DocumentEntity = DocumentEntity = __decorate([
     (0, mongoose_1.Schema)({ collection: 'documents', timestamps: true })
 ], DocumentEntity);

@@ -1,7 +1,23 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class ProcessLocalDocumentDto {
+  @ApiProperty({
+    description: 'Unique identifier for the project',
+    example: 'PRJ_LOCAL_001',
+  })
+  @IsString()
+  @IsNotEmpty()
+  projectId: string;
+
+  @ApiProperty({
+    description: 'Unique identifier for the analysis session',
+    example: 'SES_LOCAL_101',
+  })
+  @IsString()
+  @IsNotEmpty()
+  sessionId: string;
+
   @ApiProperty({
     description: 'Unique identifier for the document',
     example: 'DOC_LOCAL_001',

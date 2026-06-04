@@ -14,7 +14,5 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-__exportStar(require("./semantic-chunking.prompt"), exports);
-__exportStar(require("./chunk-classification.prompt"), exports);
-__exportStar(require("./knowledge-extraction.prompt"), exports);
+__exportStar(require("./document-analysis.prompt"), exports);
 //# sourceMappingURL=index.js.map

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentUnderstandingController } from './document-understanding.controller';
 import { DocumentProcessingService } from '../services/document-processing.service';
-import { ChunkType } from '../interfaces';
+import { ProcessDocumentResponseDto } from '../dto/process-document-response.dto';
 
 describe('DocumentUnderstandingController', () => {
   let controller: DocumentUnderstandingController;
@@ -15,6 +15,7 @@ describe('DocumentUnderstandingController', () => {
           provide: DocumentProcessingService,
           useValue: {
             processDocument: jest.fn(),
+            processLocalDocument: jest.fn(),
           },
         },
       ],
@@ -31,58 +32,59 @@ describe('DocumentUnderstandingController', () => {
   });
 
   describe('POST /documents/process', () => {
-    it('should process a document and return response', async () => {
-      const mockResponse = {
-        totalChunks: 3,
-        requirementChunks: 1,
-        testCaseChunks: 1,
-        unknownChunks: 1,
-        chunks: [
+    it('should process a document and return response with READY status', async () => {
+      const mockResponse: ProcessDocumentResponseDto = {
+        status: 'READY',
+        documentId: 'DOC001',
+        projectId: 'PRJ_001',
+        sessionId: 'SES_101',
+        analysis: {
+          confidence: 90,
+          completenessScore: 85,
+          coverageScore: 90,
+          documentType: 'FRS',
+          summary: 'Auth module specs',
+        },
+        testCases: [
           {
-            _id: 'id1',
-            documentId: 'DOC001',
-            chunkNumber: 1,
-            chunkType: ChunkType.REQUIREMENT,
-            title: 'Auth Requirement',
-            pageRange: { startPage: 1, endPage: 1 },
-            content: 'System shall...',
-            summary: {
-              shortSummary: 'Auth',
-              detailedSummary: 'Authentication requirement',
-              confidence: 90,
-            },
-            classification: { confidence: 95 },
-            extractedData: {
-              requirements: [
-                {
-                  requirementId: 'REQ-001',
-                  title: 'Auth',
-                  description: 'System shall...',
-                },
-              ],
-            },
-            processing: {
-              chunkingStrategy: 'AI_SEMANTIC' as const,
-              summaryGenerated: true,
-              extractionCompleted: true,
-            },
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            testCaseId: 'TC_AUTO_001',
+            title: 'Verify credentials login',
+            priority: 'HIGH',
+            type: 'Positive',
+            requirementIds: ['REQ_001'],
+            preConditions: [],
+            steps: ['Navigate to login page'],
+            expectedResults: ['Login success'],
+            testData: [],
           },
         ],
+        coverage: {
+          requirementsCovered: 1,
+          requirementsTotal: 1,
+          coveragePercentage: 100,
+        },
+        nextAction: 'Proceed to test execution',
       };
 
       processingService.processDocument.mockResolvedValue(mockResponse);
 
       const result = await controller.processDocument({
+        projectId: 'PRJ_001',
+        sessionId: 'SES_101',
         documentId: 'DOC001',
+        s3Bucket: 'bucket',
+        s3Key: 'key',
         markdown: '# Test\nContent',
       });
 
-      expect(result.totalChunks).toBe(3);
-      expect(result.requirementChunks).toBe(1);
+      expect(result.status).toBe('READY');
+      expect(result.testCases!.length).toBe(1);
       expect(processingService.processDocument).toHaveBeenCalledWith({
+        projectId: 'PRJ_001',
+        sessionId: 'SES_101',
         documentId: 'DOC001',
+        s3Bucket: 'bucket',
+        s3Key: 'key',
         markdown: '# Test\nContent',
       });
     });

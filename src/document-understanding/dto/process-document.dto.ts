@@ -3,6 +3,22 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ProcessDocumentDto {
   @ApiProperty({
+    description: 'Unique identifier for the project',
+    example: 'PRJ_001',
+  })
+  @IsString()
+  @IsNotEmpty()
+  projectId: string;
+
+  @ApiProperty({
+    description: 'Unique identifier for the analysis session',
+    example: 'SES_101',
+  })
+  @IsString()
+  @IsNotEmpty()
+  sessionId: string;
+
+  @ApiProperty({
     description: 'Unique identifier for the document',
     example: 'DOC001',
   })
@@ -33,4 +49,28 @@ export class ProcessDocumentDto {
   @IsString()
   @IsOptional()
   markdown?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional filename override.',
+    example: 'requirements.md',
+  })
+  @IsString()
+  @IsOptional()
+  fileName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional file type override.',
+    example: 'markdown',
+  })
+  @IsString()
+  @IsOptional()
+  fileType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional uploader user reference.',
+    example: 'admin',
+  })
+  @IsString()
+  @IsOptional()
+  uploadedBy?: string;
 }

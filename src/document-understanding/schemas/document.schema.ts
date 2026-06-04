@@ -5,32 +5,29 @@ export type DocumentEntityDocument = HydratedDocument<DocumentEntity>;
 
 @Schema({ collection: 'documents', timestamps: true })
 export class DocumentEntity extends Document {
-  @Prop({ required: true, unique: true })
-  documentId: string;
+  @Prop({ required: true })
+  projectId: string;
 
   @Prop({ required: true })
-  originalMarkdown: string;
+  sessionId: string;
 
-  @Prop({ default: 'PROCESSED' })
+  @Prop({ required: true })
+  fileName: string;
+
+  @Prop({ required: true })
+  fileType: string;
+
+  @Prop({ required: true })
+  rawText: string;
+
+  @Prop({ required: true })
+  uploadedBy: string;
+
+  @Prop({ required: true })
+  uploadedAt: Date;
+
+  @Prop({ default: 'UPLOADED' })
   status: string;
-
-  @Prop()
-  totalChunks: number;
-
-  @Prop()
-  requirementChunks: number;
-
-  @Prop()
-  testCaseChunks: number;
-
-  @Prop()
-  unknownChunks: number;
-
-  @Prop()
-  createdAt: Date;
-
-  @Prop()
-  updatedAt: Date;
 }
 
 export const DocumentSchema = SchemaFactory.createForClass(DocumentEntity);

@@ -17,14 +17,14 @@ export class DocumentUnderstandingController {
   @Post('process')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Process a document from S3',
+    summary: 'Process a document from S3 (document-centric)',
     description:
-      'Downloads a markdown document from S3, performs AI-based semantic chunking, classifies each chunk as REQUIREMENT, TEST_CASE, or UNKNOWN, extracts structured knowledge, and stores results in MongoDB.',
+      'Downloads a document from S3, retrieves relevant project knowledge, submits the entire document text + project knowledge to Amazon Bedrock (Claude Sonnet), performs a complete analysis in a single request, executes the Decision Engine, and stores results in MongoDB.',
   })
   @ApiBody({ type: ProcessDocumentDto })
   @ApiResponse({
     status: 200,
-    description: 'Document processed successfully',
+    description: 'Document processed successfully using document-centric architecture',
     type: ProcessDocumentResponseDto,
   })
   @ApiResponse({
@@ -39,7 +39,7 @@ export class DocumentUnderstandingController {
     @Body() dto: ProcessDocumentDto,
   ): Promise<ProcessDocumentResponseDto> {
     this.logger.log(
-      `Received document processing request: ${dto.documentId} (s3://${dto.s3Bucket}/${dto.s3Key})`,
+      `Received document processing request: ${dto.documentId} (s3://${dto.s3Bucket}/${dto.s3Key}) for project: ${dto.projectId}`,
     );
     return this.documentProcessingService.processDocument(dto);
   }
@@ -47,14 +47,14 @@ export class DocumentUnderstandingController {
   @Post('process-local')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Process a local document (test workflow)',
+    summary: 'Process a local document (document-centric test workflow)',
     description:
-      'Reads a markdown document from the local filesystem and runs the full processing pipeline: semantic chunking, classification, knowledge extraction, and MongoDB storage.',
+      'Reads a document from the local filesystem, parses it, retrieves relevant project knowledge, executes a complete Amazon Bedrock analysis in a single request, executes the Decision Engine, and saves results in MongoDB.',
   })
   @ApiBody({ type: ProcessLocalDocumentDto })
   @ApiResponse({
     status: 200,
-    description: 'Document processed successfully',
+    description: 'Document processed successfully using document-centric architecture',
     type: ProcessDocumentResponseDto,
   })
   @ApiResponse({
@@ -69,7 +69,7 @@ export class DocumentUnderstandingController {
     @Body() dto: ProcessLocalDocumentDto,
   ): Promise<ProcessDocumentResponseDto> {
     this.logger.log(
-      `Received local document processing request: ${dto.documentId} (${dto.filePath})`,
+      `Received local document processing request: ${dto.documentId} (${dto.filePath}) for project: ${dto.projectId}`,
     );
     return this.documentProcessingService.processLocalDocument(dto);
   }

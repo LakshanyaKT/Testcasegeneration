@@ -3,15 +3,28 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DocumentEntity, DocumentEntityDocument } from '../schemas/document.schema';
-import { DocumentChunk, DocumentChunkDocument } from '../schemas/document-chunk.schema';
-import { ChunkType, DocumentChunkData } from '../interfaces';
-import { SectionDiscoveryService } from './section-discovery.service';
-import { SemanticChunkingService } from './semantic-chunking.service';
-import { ChunkClassificationService } from './chunk-classification.service';
-import { KnowledgeExtractionService } from './knowledge-extraction.service';
+
+import { DocumentEntity } from '../schemas/document.schema';
+import { DocumentUnderstanding } from '../schemas/document-understanding.schema';
+import { ProjectKnowledge } from '../schemas/project-knowledge.schema';
+import { Clarifications } from '../schemas/clarifications.schema';
+import { TestCases } from '../schemas/test-cases.schema';
+import { AgentRuns } from '../schemas/agent-runs.schema';
+
+import {
+  BedrockResponseContract,
+  ProjectKnowledgeData,
+} from '../interfaces';
+
+import { LLMService } from './llm.service';
 import { S3DocumentService } from './s3-document.service';
 import { DocumentParsingService } from './document-parsing.service';
+
+import {
+  DOCUMENT_ANALYSIS_SYSTEM_PROMPT,
+  DOCUMENT_ANALYSIS_USER_PROMPT,
+} from '../prompts/document-analysis.prompt';
+
 import { ProcessDocumentDto, ProcessLocalDocumentDto, ProcessDocumentResponseDto } from '../dto';
 
 @Injectable()
@@ -20,26 +33,33 @@ export class DocumentProcessingService {
 
   constructor(
     @InjectModel(DocumentEntity.name)
-    private readonly documentModel: Model<DocumentEntityDocument>,
-    @InjectModel(DocumentChunk.name)
-    private readonly chunkModel: Model<DocumentChunkDocument>,
+    private readonly documentModel: Model<DocumentEntity>,
+    @InjectModel(DocumentUnderstanding.name)
+    private readonly documentUnderstandingModel: Model<DocumentUnderstanding>,
+    @InjectModel(ProjectKnowledge.name)
+    private readonly projectKnowledgeModel: Model<ProjectKnowledge>,
+    @InjectModel(Clarifications.name)
+    private readonly clarificationsModel: Model<Clarifications>,
+    @InjectModel(TestCases.name)
+    private readonly testCasesModel: Model<TestCases>,
+    @InjectModel(AgentRuns.name)
+    private readonly agentRunsModel: Model<AgentRuns>,
+
     private readonly s3DocumentService: S3DocumentService,
     private readonly documentParsingService: DocumentParsingService,
-    private readonly sectionDiscoveryService: SectionDiscoveryService,
-    private readonly semanticChunkingService: SemanticChunkingService,
-    private readonly chunkClassificationService: ChunkClassificationService,
-    private readonly knowledgeExtractionService: KnowledgeExtractionService,
+    private readonly llmService: LLMService,
   ) {}
 
   /**
    * Main processing pipeline:
-   * S3 Download → Section Discovery → AI Semantic Chunking → Classification → Knowledge Extraction → Storage
+   * S3 Download -> Retrieve Project Knowledge -> Send Full Document to Bedrock (single request) -> Decision Engine -> Store Results -> Log Run
    */
   async processDocument(dto: ProcessDocumentDto): Promise<ProcessDocumentResponseDto> {
-    const { documentId, s3Bucket, s3Key } = dto;
-    this.logger.log(`Processing document: ${documentId}`);
+    const { documentId, projectId, sessionId, s3Bucket, s3Key } = dto;
+    const startedAt = new Date();
+    this.logger.log(`Processing full document: ${documentId} for project: ${projectId}, session: ${sessionId}`);
 
-    // Step 0: Download document from S3 (or use provided markdown)
+    // Step 0: Download and parse document text
     let markdown: string;
     if (dto.markdown) {
       this.logger.log('Using provided markdown content (skipping S3 download)');
@@ -51,179 +71,253 @@ export class DocumentProcessingService {
       markdown = await this.documentParsingService.parseToMarkdown(buffer, s3Key);
     }
 
-    // Step 1: Section Discovery
-    this.logger.log('Step 1: Section Discovery');
-    const sections = this.sectionDiscoveryService.discoverSections(markdown);
-    this.logger.log(`Discovered ${sections.length} sections`);
+    // Step 1: Save raw document metadata
+    this.logger.log('Step 1: Saving document in MongoDB documents collection');
+    await this.documentModel.findOneAndUpdate(
+      { projectId, sessionId, fileName: dto.fileName || path.basename(s3Key || 'document.md') },
+      {
+        projectId,
+        sessionId,
+        fileName: dto.fileName || path.basename(s3Key || 'document.md'),
+        fileType: dto.fileType || path.extname(s3Key || '.md').substring(1) || 'markdown',
+        rawText: markdown,
+        uploadedBy: dto.uploadedBy || 'system',
+        uploadedAt: new Date(),
+        status: 'UPLOADED',
+      },
+      { upsert: true, new: true },
+    );
 
-    // Step 2 & 3 & 4: Semantic Chunking + Classification + Knowledge Extraction
-    const allChunks: DocumentChunkData[] = [];
-    let globalChunkNumber = 0;
+    // Step 2: Retrieve Relevant Project Knowledge
+    this.logger.log('Step 2: Retrieving relevant project knowledge');
+    let projectKnowledge = await this.projectKnowledgeModel.findOne({ projectId });
+    if (!projectKnowledge) {
+      this.logger.log(`No existing project knowledge found for project: ${projectId}. Creating new document...`);
+      projectKnowledge = await this.projectKnowledgeModel.create({
+        projectId,
+        entities: [],
+        businessRules: [],
+        validations: [],
+        processFlows: [],
+        workflows: [],
+        testPatterns: [],
+        domainKnowledge: [],
+        reusableScenarios: [],
+      });
+    }
 
-    for (const section of sections) {
-      // Step 2: Semantic Chunking
-      this.logger.log(`Step 2: Chunking section "${section.title}"`);
-      const semanticChunks = await this.semanticChunkingService.chunkSection(section);
+    const projectKnowledgeContext: ProjectKnowledgeData = {
+      entities: projectKnowledge.entities || [],
+      businessRules: projectKnowledge.businessRules || [],
+      validations: projectKnowledge.validations || [],
+      processFlows: projectKnowledge.processFlows || [],
+      workflows: projectKnowledge.workflows || [],
+      testPatterns: projectKnowledge.testPatterns || [],
+      domainKnowledge: projectKnowledge.domainKnowledge || [],
+      reusableScenarios: projectKnowledge.reusableScenarios || [],
+    };
 
-      for (const chunk of semanticChunks) {
-        globalChunkNumber++;
+    // Step 3: Call Amazon Bedrock for single-request analysis
+    this.logger.log('Step 3: Sending full document text + project knowledge to Bedrock Claude Sonnet');
+    
+    const task = {
+      analyzeDocument: true,
+      extractRequirements: true,
+      extractEntities: true,
+      extractBusinessRules: true,
+      extractValidations: true,
+      extractProcessFlows: true,
+      extractWorkflows: true,
+      identifyMissingInformation: true,
+      generateQuestions: true,
+      generateTestCases: true,
+      generateKnowledgeUpdates: true,
+    };
 
-        // Step 3: Classification
-        this.logger.log(`Step 3: Classifying chunk #${globalChunkNumber}`);
-        const classification =
-          await this.chunkClassificationService.classifyChunk(chunk);
+    let bedrockResponse: BedrockResponseContract;
+    try {
+      bedrockResponse = await this.llmService.generateStructuredResponse<BedrockResponseContract>({
+        systemPrompt: DOCUMENT_ANALYSIS_SYSTEM_PROMPT,
+        userPrompt: DOCUMENT_ANALYSIS_USER_PROMPT(
+          projectId,
+          sessionId,
+          markdown,
+          projectKnowledgeContext,
+          task,
+        ),
+        temperature: 0.2,
+        maxTokens: 8192,
+      });
+    } catch (error) {
+      this.logger.error(`Bedrock analysis invocation failed: ${error.message}`);
+      throw new BadRequestException(`Bedrock analysis failed: ${error.message}`);
+    }
 
-        // Step 4: Knowledge Extraction
-        this.logger.log(`Step 4: Extracting knowledge from chunk #${globalChunkNumber}`);
-        const extractedData = await this.knowledgeExtractionService.extractKnowledge(
-          chunk,
-          classification.chunkType,
-        );
+    this.logger.log(`Bedrock response received. Status: ${bedrockResponse.status}, Questions generated: ${bedrockResponse.questions?.length || 0}`);
 
-        // Generate summary
-        const summary = await this.knowledgeExtractionService.generateSummary(chunk);
+    // Step 4: Decision Engine and Storage
+    this.logger.log('Step 4: Executing Decision Engine');
+    
+    // Save document_understanding regardless of path
+    const moduleCount = new Set(bedrockResponse.requirements?.map((r) => r.module).filter(Boolean)).size;
 
-        const chunkData: DocumentChunkData = {
+    await this.documentUnderstandingModel.findOneAndUpdate(
+      { documentId },
+      {
+        documentId,
+        projectId,
+        sessionId,
+        analysis: {
+          confidence: bedrockResponse.analysis?.confidence || 0,
+          completenessScore: bedrockResponse.analysis?.completenessScore || 0,
+          coverageScore: bedrockResponse.analysis?.coverageScore || 0,
+          documentType: bedrockResponse.analysis?.documentType || 'FRS',
+          moduleCount,
+          requirementCount: bedrockResponse.requirements?.length || 0,
+        },
+        requirements: bedrockResponse.requirements || [],
+        entities: bedrockResponse.entities || [],
+        businessRules: bedrockResponse.businessRules || [],
+        validations: bedrockResponse.validations || [],
+        processFlows: bedrockResponse.processFlows || [],
+        workflows: bedrockResponse.workflows || [],
+        missingInformation: bedrockResponse.missingInformation || [],
+        questions: bedrockResponse.questions || [],
+        status: bedrockResponse.status,
+      },
+      { upsert: true, new: true },
+    );
+
+    const questionsCount = bedrockResponse.questions?.length || 0;
+
+    if (questionsCount > 0) {
+      this.logger.log('Decision Engine: Questions found. Saving Clarifications and returning NEEDS_CLARIFICATION.');
+      
+      await this.clarificationsModel.findOneAndUpdate(
+        { documentId },
+        {
           documentId,
-          chunkNumber: globalChunkNumber,
-          chunkType: classification.chunkType,
-          title: chunk.title,
-          pageRange: section.pageRange,
-          content: chunk.content,
-          summary,
-          classification: {
-            chunkType: classification.chunkType,
-            confidence: classification.confidence,
+          projectId,
+          sessionId,
+          questions: bedrockResponse.questions.map((q, idx) => ({
+            questionId: q.questionId || `Q_AUTO_${String(idx + 1).padStart(3, '0')}`,
+            question: q.question,
+            category: q.category,
+            priority: q.priority,
+          })),
+          answers: [],
+          status: 'PENDING_USER',
+        },
+        { upsert: true, new: true },
+      );
+    } else {
+      this.logger.log('Decision Engine: No questions found. Saving Test Cases and updating Project Knowledge.');
+      
+      // Save Test Cases
+      await this.testCasesModel.findOneAndUpdate(
+        { documentId },
+        {
+          documentId,
+          projectId,
+          sessionId,
+          testCases: bedrockResponse.testCases || [],
+          coverage: bedrockResponse.coverage || {
+            requirementsCovered: 0,
+            requirementsTotal: bedrockResponse.requirements?.length || 0,
+            coveragePercentage: 0,
           },
-          extractedData,
-          processing: {
-            chunkingStrategy: 'AI_SEMANTIC',
-            summaryGenerated: true,
-            extractionCompleted: true,
-          },
-        };
+        },
+        { upsert: true, new: true },
+      );
 
-        allChunks.push(chunkData);
+      // Update Project Knowledge
+      const suggestedKnowledge = bedrockResponse.knowledgeBase?.projectKnowledge;
+      if (suggestedKnowledge) {
+        this.logger.log('Updating project knowledge collection from Bedrock suggestion payload');
+        await this.projectKnowledgeModel.findOneAndUpdate(
+          { projectId },
+          {
+            projectId,
+            entities: suggestedKnowledge.entities || [],
+            businessRules: suggestedKnowledge.businessRules || [],
+            validations: suggestedKnowledge.validations || [],
+            processFlows: suggestedKnowledge.processFlows || [],
+            workflows: suggestedKnowledge.workflows || [],
+            testPatterns: suggestedKnowledge.testPatterns || [],
+            domainKnowledge: suggestedKnowledge.domainKnowledge || [],
+            reusableScenarios: suggestedKnowledge.reusableScenarios || [],
+          },
+          { upsert: true, new: true },
+        );
       }
     }
 
-    // Step 5: MongoDB Storage
-    this.logger.log('Step 5: Storing results in MongoDB');
-    await this.storeResults(documentId, markdown, allChunks);
+    // Step 5: Save Agent Run
+    const completedAt = new Date();
+    const executionTime = completedAt.getTime() - startedAt.getTime();
+    this.logger.log(`Step 5: Logging agent execution metadata in agent_runs collection (Execution Time: ${executionTime}ms)`);
+    
+    await this.agentRunsModel.create({
+      projectId,
+      sessionId,
+      documentId,
+      status: bedrockResponse.status,
+      startedAt,
+      completedAt,
+      bedrockCalls: 1,
+      executionTime,
+    });
 
-    // Build response
-    const response = this.buildResponse(allChunks);
-    this.logger.log(
-      `Document ${documentId} processed: ${response.totalChunks} chunks ` +
-        `(${response.requirementChunks} requirements, ${response.testCaseChunks} test cases, ${response.unknownChunks} unknown)`,
-    );
-
-    return response;
+    // Step 6: Construct response DTO
+    return {
+      status: bedrockResponse.status,
+      documentId,
+      projectId,
+      sessionId,
+      analysis: bedrockResponse.analysis,
+      requirements: bedrockResponse.requirements,
+      entities: bedrockResponse.entities,
+      businessRules: bedrockResponse.businessRules,
+      validations: bedrockResponse.validations,
+      processFlows: bedrockResponse.processFlows,
+      workflows: bedrockResponse.workflows,
+      missingInformation: bedrockResponse.missingInformation,
+      questions: bedrockResponse.status === 'NEEDS_CLARIFICATION' ? bedrockResponse.questions : undefined,
+      testCases: bedrockResponse.status === 'READY' ? bedrockResponse.testCases : undefined,
+      coverage: bedrockResponse.status === 'READY' ? bedrockResponse.coverage : undefined,
+      nextAction: bedrockResponse.nextAction,
+    };
   }
 
   /**
-   * Test workflow: reads a local file and runs the full pipeline.
+   * Test workflow: reads a local file and runs the full document-centric pipeline.
    * Supports PDF, DOCX, and Markdown files.
-   * Local File → Parse to Markdown → Section Discovery → AI Semantic Chunking → Classification → Knowledge Extraction → Storage
    */
   async processLocalDocument(dto: ProcessLocalDocumentDto): Promise<ProcessDocumentResponseDto> {
-    const { documentId, filePath } = dto;
+    const { documentId, projectId, sessionId, filePath } = dto;
     this.logger.log(`Processing local document: ${documentId} from ${filePath}`);
 
-    // Resolve the file path
     const resolvedPath = path.resolve(filePath);
 
     if (!fs.existsSync(resolvedPath)) {
       throw new BadRequestException(`File not found: ${resolvedPath}`);
     }
 
-    // Read as buffer (required for PDF/DOCX binary formats)
     const buffer = fs.readFileSync(resolvedPath);
     this.logger.log(`Read local file: ${resolvedPath} (${buffer.length} bytes)`);
 
-    // Parse to markdown based on file extension
     const markdown = await this.documentParsingService.parseToMarkdown(buffer, resolvedPath);
-    this.logger.log(`Parsed to markdown: ${markdown.length} chars`);
+    this.logger.log(`Parsed local file to markdown: ${markdown.length} characters`);
 
-    // Reuse the main pipeline with the markdown content
     return this.processDocument({
       documentId,
+      projectId,
+      sessionId,
       s3Bucket: 'local',
       s3Key: filePath,
       markdown,
+      fileName: path.basename(filePath),
+      fileType: path.extname(filePath).substring(1),
     });
-  }
-
-  private async storeResults(
-    documentId: string,
-    markdown: string,
-    chunks: DocumentChunkData[],
-  ): Promise<void> {
-    const requirementChunks = chunks.filter(
-      (c) => c.chunkType === ChunkType.REQUIREMENT,
-    ).length;
-    const testCaseChunks = chunks.filter(
-      (c) => c.chunkType === ChunkType.TEST_CASE,
-    ).length;
-    const unknownChunks = chunks.filter(
-      (c) => c.chunkType === ChunkType.UNKNOWN,
-    ).length;
-
-    // Upsert the document record
-    await this.documentModel.findOneAndUpdate(
-      { documentId },
-      {
-        documentId,
-        originalMarkdown: markdown,
-        status: 'PROCESSED',
-        totalChunks: chunks.length,
-        requirementChunks,
-        testCaseChunks,
-        unknownChunks,
-      },
-      { upsert: true, new: true },
-    );
-
-    // Remove existing chunks for this document (re-processing support)
-    await this.chunkModel.deleteMany({ documentId });
-
-    // Insert all new chunks
-    if (chunks.length > 0) {
-      await this.chunkModel.insertMany(chunks);
-    }
-  }
-
-  private buildResponse(chunks: DocumentChunkData[]): ProcessDocumentResponseDto {
-    const requirementChunks = chunks.filter(
-      (c) => c.chunkType === ChunkType.REQUIREMENT,
-    ).length;
-    const testCaseChunks = chunks.filter(
-      (c) => c.chunkType === ChunkType.TEST_CASE,
-    ).length;
-    const unknownChunks = chunks.filter(
-      (c) => c.chunkType === ChunkType.UNKNOWN,
-    ).length;
-
-    return {
-      totalChunks: chunks.length,
-      requirementChunks,
-      testCaseChunks,
-      unknownChunks,
-      chunks: chunks.map((chunk) => ({
-        _id: '',
-        documentId: chunk.documentId,
-        chunkNumber: chunk.chunkNumber,
-        chunkType: chunk.chunkType,
-        title: chunk.title,
-        pageRange: chunk.pageRange,
-        content: chunk.content,
-        summary: chunk.summary,
-        classification: { confidence: chunk.classification.confidence },
-        extractedData: chunk.extractedData,
-        processing: chunk.processing,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })),
-    };
   }
 }

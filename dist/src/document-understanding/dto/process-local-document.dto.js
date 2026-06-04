@@ -17,6 +17,24 @@ class ProcessLocalDocumentDto {
 exports.ProcessLocalDocumentDto = ProcessLocalDocumentDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
+        description: 'Unique identifier for the project',
+        example: 'PRJ_LOCAL_001',
+    }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], ProcessLocalDocumentDto.prototype, "projectId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        description: 'Unique identifier for the analysis session',
+        example: 'SES_LOCAL_101',
+    }),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    __metadata("design:type", String)
+], ProcessLocalDocumentDto.prototype, "sessionId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
         description: 'Unique identifier for the document',
         example: 'DOC_LOCAL_001',
     }),

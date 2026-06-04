@@ -1,227 +1,267 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { DocumentProcessingService } from './document-processing.service';
-import { SectionDiscoveryService } from './section-discovery.service';
-import { SemanticChunkingService } from './semantic-chunking.service';
-import { ChunkClassificationService } from './chunk-classification.service';
-import { KnowledgeExtractionService } from './knowledge-extraction.service';
+import { S3DocumentService } from './s3-document.service';
+import { DocumentParsingService } from './document-parsing.service';
+import { LLMService } from './llm.service';
+
 import { DocumentEntity } from '../schemas/document.schema';
-import { DocumentChunk } from '../schemas/document-chunk.schema';
-import { ChunkType } from '../interfaces';
+import { DocumentUnderstanding } from '../schemas/document-understanding.schema';
+import { ProjectKnowledge } from '../schemas/project-knowledge.schema';
+import { Clarifications } from '../schemas/clarifications.schema';
+import { TestCases } from '../schemas/test-cases.schema';
+import { AgentRuns } from '../schemas/agent-runs.schema';
 
 describe('DocumentProcessingService', () => {
   let service: DocumentProcessingService;
-  let sectionDiscoveryService: jest.Mocked<SectionDiscoveryService>;
-  let semanticChunkingService: jest.Mocked<SemanticChunkingService>;
-  let chunkClassificationService: jest.Mocked<ChunkClassificationService>;
-  let knowledgeExtractionService: jest.Mocked<KnowledgeExtractionService>;
+  let llmService: jest.Mocked<LLMService>;
+  let s3DocumentService: jest.Mocked<S3DocumentService>;
+  let documentParsingService: jest.Mocked<DocumentParsingService>;
 
-  const mockDocumentModel = {
+  const createMockModel = () => ({
+    findOne: jest.fn(),
     findOneAndUpdate: jest.fn().mockResolvedValue({}),
-  };
+    create: jest.fn().mockResolvedValue({}),
+  });
 
-  const mockChunkModel = {
-    deleteMany: jest.fn().mockResolvedValue({}),
-    insertMany: jest.fn().mockResolvedValue([]),
-  };
+  let documentModel: ReturnType<typeof createMockModel>;
+  let documentUnderstandingModel: ReturnType<typeof createMockModel>;
+  let projectKnowledgeModel: ReturnType<typeof createMockModel>;
+  let clarificationsModel: ReturnType<typeof createMockModel>;
+  let testCasesModel: ReturnType<typeof createMockModel>;
+  let agentRunsModel: ReturnType<typeof createMockModel>;
 
   beforeEach(async () => {
+    documentModel = createMockModel();
+    documentUnderstandingModel = createMockModel();
+    projectKnowledgeModel = createMockModel();
+    clarificationsModel = createMockModel();
+    testCasesModel = createMockModel();
+    agentRunsModel = createMockModel();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DocumentProcessingService,
         {
           provide: getModelToken(DocumentEntity.name),
-          useValue: mockDocumentModel,
+          useValue: documentModel,
         },
         {
-          provide: getModelToken(DocumentChunk.name),
-          useValue: mockChunkModel,
+          provide: getModelToken(DocumentUnderstanding.name),
+          useValue: documentUnderstandingModel,
         },
         {
-          provide: SectionDiscoveryService,
+          provide: getModelToken(ProjectKnowledge.name),
+          useValue: projectKnowledgeModel,
+        },
+        {
+          provide: getModelToken(Clarifications.name),
+          useValue: clarificationsModel,
+        },
+        {
+          provide: getModelToken(TestCases.name),
+          useValue: testCasesModel,
+        },
+        {
+          provide: getModelToken(AgentRuns.name),
+          useValue: agentRunsModel,
+        },
+        {
+          provide: S3DocumentService,
           useValue: {
-            discoverSections: jest.fn(),
+            downloadDocumentBuffer: jest.fn().mockResolvedValue(Buffer.from('doc')),
           },
         },
         {
-          provide: SemanticChunkingService,
+          provide: DocumentParsingService,
           useValue: {
-            chunkSection: jest.fn(),
+            parseToMarkdown: jest.fn().mockResolvedValue('parsed-markdown'),
           },
         },
         {
-          provide: ChunkClassificationService,
+          provide: LLMService,
           useValue: {
-            classifyChunk: jest.fn(),
-          },
-        },
-        {
-          provide: KnowledgeExtractionService,
-          useValue: {
-            extractKnowledge: jest.fn(),
-            generateSummary: jest.fn(),
+            generateStructuredResponse: jest.fn(),
           },
         },
       ],
     }).compile();
 
     service = module.get<DocumentProcessingService>(DocumentProcessingService);
-    sectionDiscoveryService = module.get(SectionDiscoveryService);
-    semanticChunkingService = module.get(SemanticChunkingService);
-    chunkClassificationService = module.get(ChunkClassificationService);
-    knowledgeExtractionService = module.get(KnowledgeExtractionService);
+    llmService = module.get(LLMService);
+    s3DocumentService = module.get(S3DocumentService);
+    documentParsingService = module.get(DocumentParsingService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  describe('processDocument', () => {
-    it('should process a document through the full pipeline', async () => {
-      // Setup mocks
-      sectionDiscoveryService.discoverSections.mockReturnValue([
-        {
-          sectionId: 'SEC_001',
-          title: 'Requirements',
-          content: 'The system shall authenticate users',
-          pageRange: { startPage: 1, endPage: 1 },
-        },
-      ]);
-
-      semanticChunkingService.chunkSection.mockResolvedValue([
-        {
-          chunkNumber: 1,
-          title: 'Authentication Requirement',
-          content: 'The system shall authenticate users',
-        },
-      ]);
-
-      chunkClassificationService.classifyChunk.mockResolvedValue({
-        chunkType: ChunkType.REQUIREMENT,
-        confidence: 95,
+  describe('processDocument with READY status', () => {
+    it('should run Decision Engine, update project knowledge and save test cases', async () => {
+      // Mock existing project knowledge
+      projectKnowledgeModel.findOne.mockResolvedValue({
+        projectId: 'PRJ_001',
+        entities: [],
+        businessRules: [],
+        validations: [],
+        processFlows: [],
+        workflows: [],
+        testPatterns: [],
+        domainKnowledge: [],
+        reusableScenarios: [],
       });
 
-      knowledgeExtractionService.extractKnowledge.mockResolvedValue({
+      // Mock LLM response with no questions (READY status)
+      llmService.generateStructuredResponse.mockResolvedValue({
+        status: 'READY',
+        analysis: {
+          confidence: 90,
+          completenessScore: 85,
+          coverageScore: 90,
+          documentType: 'FRS',
+          summary: 'Summary description',
+        },
+        knowledgeBase: {
+          projectKnowledge: {
+            entities: [{ name: 'User', description: 'Represents a user', attributes: ['id', 'email'] }],
+            businessRules: [],
+            validations: [],
+            processFlows: [],
+            workflows: [],
+            testPatterns: [],
+            domainKnowledge: [],
+          },
+          sessionKnowledge: {
+            requirements: [],
+            entities: [],
+            businessRules: [],
+            validations: [],
+            processFlows: [],
+            workflows: [],
+          },
+        },
         requirements: [
           {
             requirementId: 'REQ-001',
-            title: 'User Auth',
-            description: 'The system shall authenticate users',
+            module: 'Auth',
+            title: 'User Login',
+            description: 'User must login',
+            priority: 'HIGH',
+            category: 'Functional',
           },
         ],
-      });
-
-      knowledgeExtractionService.generateSummary.mockResolvedValue({
-        shortSummary: 'Authentication requirement',
-        detailedSummary: 'Describes the authentication mechanism',
-        confidence: 92,
+        entities: [],
+        businessRules: [],
+        validations: [],
+        processFlows: [],
+        workflows: [],
+        missingInformation: [],
+        questions: [], // Zero questions
+        testCases: [
+          {
+            testCaseId: 'TC-001',
+            title: 'Login positive scenario',
+            priority: 'HIGH',
+            type: 'Positive',
+            requirementIds: ['REQ-001'],
+            preConditions: [],
+            steps: ['Step 1'],
+            expectedResults: ['Login success'],
+            testData: [],
+          },
+        ],
+        coverage: {
+          requirementsCovered: 1,
+          requirementsTotal: 1,
+          coveragePercentage: 100,
+        },
+        nextAction: 'Proceed to test execution',
       });
 
       const result = await service.processDocument({
-        documentId: 'DOC001',
-        markdown: '# Requirements\nThe system shall authenticate users',
+        projectId: 'PRJ_001',
+        sessionId: 'SES_001',
+        documentId: 'DOC_001',
+        s3Bucket: 'bucket',
+        s3Key: 'key',
       });
 
-      expect(result.totalChunks).toBe(1);
-      expect(result.requirementChunks).toBe(1);
-      expect(result.testCaseChunks).toBe(0);
-      expect(result.unknownChunks).toBe(0);
-      expect(result.chunks.length).toBe(1);
-      expect(result.chunks[0].chunkType).toBe(ChunkType.REQUIREMENT);
+      expect(result.status).toBe('READY');
+      expect(result.testCases!.length).toBe(1);
+      expect(result.questions).toBeUndefined(); // Filtered/omitted or empty in READY
+      
+      expect(documentModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(documentUnderstandingModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(testCasesModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(projectKnowledgeModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(agentRunsModel.create).toHaveBeenCalledTimes(1);
     });
+  });
 
-    it('should handle multiple chunk types', async () => {
-      sectionDiscoveryService.discoverSections.mockReturnValue([
-        {
-          sectionId: 'SEC_001',
-          title: 'Mixed Content',
-          content: 'Mixed content here',
-          pageRange: { startPage: 1, endPage: 3 },
+  describe('processDocument with NEEDS_CLARIFICATION status', () => {
+    it('should run Decision Engine, save clarifications and return questions', async () => {
+      // Mock existing project knowledge
+      projectKnowledgeModel.findOne.mockResolvedValue(null); // create a default project knowledge entry
+
+      // Mock LLM response with questions (NEEDS_CLARIFICATION status)
+      llmService.generateStructuredResponse.mockResolvedValue({
+        status: 'NEEDS_CLARIFICATION',
+        analysis: {
+          confidence: 70,
+          completenessScore: 50,
+          coverageScore: 30,
+          documentType: 'FRS',
+          summary: 'Summary with gaps',
         },
-      ]);
-
-      semanticChunkingService.chunkSection.mockResolvedValue([
-        { chunkNumber: 1, title: 'Req', content: 'System shall...' },
-        { chunkNumber: 2, title: 'Test', content: 'Verify that...' },
-        { chunkNumber: 3, title: 'Notes', content: 'Meeting notes...' },
-      ]);
-
-      chunkClassificationService.classifyChunk
-        .mockResolvedValueOnce({ chunkType: ChunkType.REQUIREMENT, confidence: 90 })
-        .mockResolvedValueOnce({ chunkType: ChunkType.TEST_CASE, confidence: 88 })
-        .mockResolvedValueOnce({ chunkType: ChunkType.UNKNOWN, confidence: 85 });
-
-      knowledgeExtractionService.extractKnowledge
-        .mockResolvedValueOnce({
-          requirements: [{ requirementId: 'REQ-001', title: 'R', description: 'D' }],
-        })
-        .mockResolvedValueOnce({
-          testCases: [
-            {
-              testCaseId: 'TC-001',
-              scenario: 'S',
-              preconditions: [],
-              steps: [],
-              expectedResults: [],
-            },
-          ],
-        })
-        .mockResolvedValueOnce({ category: 'UNKNOWN' });
-
-      knowledgeExtractionService.generateSummary.mockResolvedValue({
-        shortSummary: 'Summary',
-        detailedSummary: 'Detailed',
-        confidence: 80,
+        requirements: [],
+        entities: [],
+        businessRules: [],
+        validations: [],
+        processFlows: [],
+        workflows: [],
+        missingInformation: [
+          {
+            id: 'GAP-001',
+            category: 'Auth',
+            description: 'Authentication server address is missing',
+            severity: 'HIGH',
+          },
+        ],
+        questions: [
+          {
+            questionId: 'Q-001',
+            question: 'What is the authentication server URL?',
+            category: 'Auth',
+            priority: 'HIGH',
+          },
+        ],
+        testCases: [],
+        coverage: {
+          requirementsCovered: 0,
+          requirementsTotal: 0,
+          coveragePercentage: 0,
+        },
+        nextAction: 'Await clarifications',
       });
 
       const result = await service.processDocument({
-        documentId: 'DOC002',
-        markdown: '# Mixed\nContent',
+        projectId: 'PRJ_002',
+        sessionId: 'SES_002',
+        documentId: 'DOC_002',
+        s3Bucket: 'bucket',
+        s3Key: 'key',
       });
 
-      expect(result.totalChunks).toBe(3);
-      expect(result.requirementChunks).toBe(1);
-      expect(result.testCaseChunks).toBe(1);
-      expect(result.unknownChunks).toBe(1);
-    });
-
-    it('should store results in MongoDB', async () => {
-      sectionDiscoveryService.discoverSections.mockReturnValue([
-        {
-          sectionId: 'SEC_001',
-          title: 'Section',
-          content: 'Content',
-          pageRange: { startPage: 1, endPage: 1 },
-        },
-      ]);
-
-      semanticChunkingService.chunkSection.mockResolvedValue([
-        { chunkNumber: 1, title: 'Chunk', content: 'Content' },
-      ]);
-
-      chunkClassificationService.classifyChunk.mockResolvedValue({
-        chunkType: ChunkType.UNKNOWN,
-        confidence: 70,
-      });
-
-      knowledgeExtractionService.extractKnowledge.mockResolvedValue({
-        category: 'UNKNOWN',
-      });
-
-      knowledgeExtractionService.generateSummary.mockResolvedValue({
-        shortSummary: 'S',
-        detailedSummary: 'D',
-        confidence: 70,
-      });
-
-      await service.processDocument({
-        documentId: 'DOC003',
-        markdown: '# Section\nContent',
-      });
-
-      expect(mockDocumentModel.findOneAndUpdate).toHaveBeenCalled();
-      expect(mockChunkModel.deleteMany).toHaveBeenCalledWith({ documentId: 'DOC003' });
-      expect(mockChunkModel.insertMany).toHaveBeenCalled();
+      expect(result.status).toBe('NEEDS_CLARIFICATION');
+      expect(result.questions!.length).toBe(1);
+      expect(result.testCases).toBeUndefined(); // Omitted in response dto for NEEDS_CLARIFICATION
+      
+      expect(projectKnowledgeModel.create).toHaveBeenCalledTimes(1);
+      expect(documentModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(documentUnderstandingModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(clarificationsModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(agentRunsModel.create).toHaveBeenCalledTimes(1);
     });
   });
 });
