@@ -34,6 +34,16 @@ export class Clarification extends Document {
   })
   status: ClarificationStatus;
 
+  // Priority fields — populated after POST /clarifications/:documentId/prioritize
+  @Prop({ type: Number, default: null })
+  priorityRank: number | null;
+
+  @Prop({ type: String, default: null })
+  priorityBatch: string | null;   // batch ID grouping a single prioritize run
+
+  @Prop({ type: String, default: null })
+  priorityReason: string | null;  // why Claude ranked it high
+
   @Prop()
   createdAt: Date;
 
@@ -44,3 +54,4 @@ export class Clarification extends Document {
 export const ClarificationSchema = SchemaFactory.createForClass(Clarification);
 
 ClarificationSchema.index({ documentId: 1, status: 1 });
+ClarificationSchema.index({ documentId: 1, priorityRank: 1 });

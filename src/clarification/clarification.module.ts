@@ -16,6 +16,6 @@ import { LLMService } from '../document-understanding/services/llm.service';
   ],
   controllers: [ClarificationController],
   providers: [ClarificationService, ClarificationRepository, LLMService],
-  exports: [ClarificationService],
+  exports: [ClarificationService, ClarificationRepository],
 })
 export class ClarificationModule {}
