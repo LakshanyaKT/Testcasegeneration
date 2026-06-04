@@ -64,6 +64,7 @@ let KnowledgeExtractionService = KnowledgeExtractionService_1 = class KnowledgeE
                 systemPrompt: knowledge_extraction_prompt_1.SUMMARY_GENERATION_SYSTEM_PROMPT,
                 userPrompt: (0, knowledge_extraction_prompt_1.SUMMARY_GENERATION_USER_PROMPT)(chunk.title, chunk.content),
                 temperature: 0.2,
+                maxTokens: 512,
             });
             const validated = SummaryResponseSchema.parse(response);
             return {
@@ -87,6 +88,7 @@ let KnowledgeExtractionService = KnowledgeExtractionService_1 = class KnowledgeE
                 systemPrompt: knowledge_extraction_prompt_1.REQUIREMENT_EXTRACTION_SYSTEM_PROMPT,
                 userPrompt: (0, knowledge_extraction_prompt_1.REQUIREMENT_EXTRACTION_USER_PROMPT)(chunk.title, chunk.content),
                 temperature: 0.1,
+                maxTokens: 2048,
             });
             const validated = RequirementExtractionResponseSchema.parse(response);
             const requirements = validated.requirements.map((req, index) => ({
@@ -116,6 +118,7 @@ let KnowledgeExtractionService = KnowledgeExtractionService_1 = class KnowledgeE
                 systemPrompt: knowledge_extraction_prompt_1.TEST_CASE_EXTRACTION_SYSTEM_PROMPT,
                 userPrompt: (0, knowledge_extraction_prompt_1.TEST_CASE_EXTRACTION_USER_PROMPT)(chunk.title, chunk.content),
                 temperature: 0.1,
+                maxTokens: 2048,
             });
             const validated = TestCaseExtractionResponseSchema.parse(response);
             const testCases = validated.testCases.map((tc, index) => ({

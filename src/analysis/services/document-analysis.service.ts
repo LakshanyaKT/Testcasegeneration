@@ -46,6 +46,7 @@ export class DocumentAnalysisService {
   async analyzeDocument(documentId: string): Promise<AnalyzeDocumentResponseDto> {
     this.logger.log(`Starting document analysis for: ${documentId}`);
 
+    this.logger.log(`Fetching chunks from MongoDB for: ${documentId}`);
     const chunks = await this.chunkModel
       .find({ documentId })
       .sort({ chunkNumber: 1 })
@@ -58,6 +59,7 @@ export class DocumentAnalysisService {
       );
     }
 
+    this.logger.log(`Found ${chunks.length} chunks, aggregating and calling Bedrock...`);
     const aggregations = this.aggregateChunks(chunks as any[]);
     const chunksPayload = JSON.stringify(aggregations, null, 2);
 
@@ -65,7 +67,7 @@ export class DocumentAnalysisService {
       systemPrompt: DOCUMENT_ANALYSIS_SYSTEM_PROMPT,
       userPrompt: DOCUMENT_ANALYSIS_USER_PROMPT(documentId, chunksPayload),
       temperature: 0.1,
-      maxTokens: 8192,
+      maxTokens: 4096,
     });
 
     const validated = DocumentAnalysisResultSchema.parse(rawResult);
@@ -149,7 +151,7 @@ export class DocumentAnalysisService {
         chunksPayload,
       ),
       temperature: 0.1,
-      maxTokens: 8192,
+      maxTokens: 4096,
     });
 
     const validated = DocumentAnalysisResultSchema.parse(rawResult);

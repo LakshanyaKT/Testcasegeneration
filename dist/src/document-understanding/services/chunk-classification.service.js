@@ -33,6 +33,7 @@ let ChunkClassificationService = ChunkClassificationService_1 = class ChunkClass
                 systemPrompt: chunk_classification_prompt_1.CHUNK_CLASSIFICATION_SYSTEM_PROMPT,
                 userPrompt: (0, chunk_classification_prompt_1.CHUNK_CLASSIFICATION_USER_PROMPT)(chunk.title, chunk.content),
                 temperature: 0.05,
+                maxTokens: 256,
             });
             const validated = ClassificationResponseSchema.parse(response);
             this.logger.log(`Chunk "${chunk.title}" classified as ${validated.chunkType} (confidence: ${validated.confidence}%)`);

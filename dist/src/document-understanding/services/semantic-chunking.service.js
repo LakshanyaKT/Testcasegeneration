@@ -44,6 +44,7 @@ let SemanticChunkingService = SemanticChunkingService_1 = class SemanticChunking
                 systemPrompt: semantic_chunking_prompt_1.SEMANTIC_CHUNKING_SYSTEM_PROMPT,
                 userPrompt: (0, semantic_chunking_prompt_1.SEMANTIC_CHUNKING_USER_PROMPT)(section.title, section.content),
                 temperature: 0.1,
+                maxTokens: 4096,
             });
             const validated = SemanticChunkingResponseSchema.parse(response);
             if (!validated.chunks || validated.chunks.length === 0) {

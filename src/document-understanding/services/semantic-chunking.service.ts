@@ -48,6 +48,7 @@ export class SemanticChunkingService {
         systemPrompt: SEMANTIC_CHUNKING_SYSTEM_PROMPT,
         userPrompt: SEMANTIC_CHUNKING_USER_PROMPT(section.title, section.content),
         temperature: 0.1,
+        maxTokens: 4096,
       });
 
       const validated = SemanticChunkingResponseSchema.parse(response);

@@ -33,6 +33,7 @@ export class ChunkClassificationService {
         systemPrompt: CHUNK_CLASSIFICATION_SYSTEM_PROMPT,
         userPrompt: CHUNK_CLASSIFICATION_USER_PROMPT(chunk.title, chunk.content),
         temperature: 0.05,
+        maxTokens: 256,
       });
 
       const validated = ClassificationResponseSchema.parse(response);

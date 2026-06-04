@@ -89,6 +89,7 @@ export class KnowledgeExtractionService {
         systemPrompt: SUMMARY_GENERATION_SYSTEM_PROMPT,
         userPrompt: SUMMARY_GENERATION_USER_PROMPT(chunk.title, chunk.content),
         temperature: 0.2,
+        maxTokens: 512,
       });
 
       const validated = SummaryResponseSchema.parse(response);
@@ -115,6 +116,7 @@ export class KnowledgeExtractionService {
           systemPrompt: REQUIREMENT_EXTRACTION_SYSTEM_PROMPT,
           userPrompt: REQUIREMENT_EXTRACTION_USER_PROMPT(chunk.title, chunk.content),
           temperature: 0.1,
+          maxTokens: 2048,
         });
 
       const validated = RequirementExtractionResponseSchema.parse(response);
@@ -154,6 +156,7 @@ export class KnowledgeExtractionService {
           systemPrompt: TEST_CASE_EXTRACTION_SYSTEM_PROMPT,
           userPrompt: TEST_CASE_EXTRACTION_USER_PROMPT(chunk.title, chunk.content),
           temperature: 0.1,
+          maxTokens: 2048,
         });
 
       const validated = TestCaseExtractionResponseSchema.parse(response);

@@ -75,7 +75,7 @@ export class ClarificationService {
         analysis.riskAreas,
       ),
       temperature: 0.2,
-      maxTokens: 4096,
+      maxTokens: 2048,
     });
 
     const validated = ClarificationGenerationResponseSchema.parse(rawResult);
