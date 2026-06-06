@@ -51,6 +51,18 @@ __decorate([
     __metadata("design:type", String)
 ], Clarification.prototype, "status", void 0);
 __decorate([
+    (0, mongoose_1.Prop)({ type: Number, default: null }),
+    __metadata("design:type", Object)
+], Clarification.prototype, "priorityRank", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, default: null }),
+    __metadata("design:type", Object)
+], Clarification.prototype, "priorityBatch", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, default: null }),
+    __metadata("design:type", Object)
+], Clarification.prototype, "priorityReason", void 0);
+__decorate([
     (0, mongoose_1.Prop)(),
     __metadata("design:type", Date)
 ], Clarification.prototype, "createdAt", void 0);
@@ -63,4 +75,5 @@ exports.Clarification = Clarification = __decorate([
 ], Clarification);
 exports.ClarificationSchema = mongoose_1.SchemaFactory.createForClass(Clarification);
 exports.ClarificationSchema.index({ documentId: 1, status: 1 });
+exports.ClarificationSchema.index({ documentId: 1, priorityRank: 1 });
 //# sourceMappingURL=clarification.schema.js.map

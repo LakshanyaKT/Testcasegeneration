@@ -93,8 +93,8 @@ export class TestScriptGenerationService {
     // Clear any previously generated scripts for this document
     await this.testScriptRepository.deleteByDocumentId(documentId);
 
-    const requirementChunks = chunks.filter((c) => c.chunkType === 'REQUIREMENT');
-    const testCaseChunks = chunks.filter((c) => c.chunkType === 'TEST_CASE');
+    const requirementChunks = chunks.filter((c) => c.chunkType === 'REQUIREMENT').slice(0, 1);
+    const testCaseChunks = chunks.filter((c) => c.chunkType === 'TEST_CASE').slice(0, 1);
 
     const allScripts: any[] = [];
     let scriptIndex = 0;
@@ -118,7 +118,7 @@ export class TestScriptGenerationService {
             clarificationsPayload,
           ),
           temperature: 0.2,
-          maxTokens: 8192,
+          maxTokens: 16384,
         });
 
         const validated = GenerationResponseSchema.parse(rawResult);
@@ -168,7 +168,7 @@ export class TestScriptGenerationService {
             clarificationsPayload,
           ),
           temperature: 0.2,
-          maxTokens: 8192,
+          maxTokens: 16384,
         });
 
         const validated = GenerationResponseSchema.parse(rawResult);

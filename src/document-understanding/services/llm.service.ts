@@ -3,6 +3,7 @@ import {
   BedrockRuntimeClient,
   ConverseCommand,
 } from '@aws-sdk/client-bedrock-runtime';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { withRetry } from '../utils/retry.util';
 import { parseJsonFromLLMResponse } from '../utils/json-parser.util';
 
@@ -26,9 +27,11 @@ export class LLMService {
 
     this.client = new BedrockRuntimeClient({
       region,
-      requestHandler: {
-        requestTimeout: 60_000, // 60 seconds timeout
-      } as any,
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: 10_000,
+        requestTimeout: 180_000, // 3 minutes
+        socketTimeout: 180_000,  // 3 minutes
+      }),
     });
 
     this.logger.log(
@@ -65,9 +68,7 @@ export class LLMService {
           },
         });
 
-        const response = await this.client.send(command, {
-          requestTimeout: 60_000,
-        });
+        const response = await this.client.send(command);
 
         const text = response.output?.message?.content?.[0]?.text;
 

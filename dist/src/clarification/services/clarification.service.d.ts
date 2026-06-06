@@ -2,7 +2,7 @@ import { LLMService } from '../../document-understanding/services/llm.service';
 import { DocumentAnalysisRepository } from '../../analysis/repositories/document-analysis.repository';
 import { DocumentAnalysisService } from '../../analysis/services/document-analysis.service';
 import { ClarificationRepository } from '../repositories/clarification.repository';
-import { GenerateClarificationsResponseDto, GetClarificationsResponseDto, RespondClarificationResponseDto } from '../dto';
+import { GenerateClarificationsResponseDto, GetClarificationsResponseDto, RespondClarificationResponseDto, PrioritizeClarificationsResponseDto, GetPrioritizedClarificationsResponseDto } from '../dto';
 export declare class ClarificationService {
     private readonly llmService;
     private readonly analysisRepository;
@@ -11,6 +11,8 @@ export declare class ClarificationService {
     private readonly logger;
     constructor(llmService: LLMService, analysisRepository: DocumentAnalysisRepository, documentAnalysisService: DocumentAnalysisService, clarificationRepository: ClarificationRepository);
     generateClarifications(documentId: string): Promise<GenerateClarificationsResponseDto>;
+    prioritizeClarifications(documentId: string, topK?: number): Promise<PrioritizeClarificationsResponseDto>;
+    getPrioritizedClarifications(documentId: string): Promise<GetPrioritizedClarificationsResponseDto>;
     getClarifications(documentId: string): Promise<GetClarificationsResponseDto>;
     respondToClarification(clarificationId: string, answer: string): Promise<RespondClarificationResponseDto>;
     private toResponseDto;

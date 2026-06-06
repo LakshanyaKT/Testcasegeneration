@@ -13,6 +13,9 @@ export declare class Clarification extends Document {
     reason: string;
     answer: string | null;
     status: ClarificationStatus;
+    priorityRank: number | null;
+    priorityBatch: string | null;
+    priorityReason: string | null;
     createdAt: Date;
     updatedAt: Date;
 }

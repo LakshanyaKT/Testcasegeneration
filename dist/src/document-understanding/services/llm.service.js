@@ -13,6 +13,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LLMService = void 0;
 const common_1 = require("@nestjs/common");
 const client_bedrock_runtime_1 = require("@aws-sdk/client-bedrock-runtime");
+const node_http_handler_1 = require("@smithy/node-http-handler");
 const retry_util_1 = require("../utils/retry.util");
 const json_parser_util_1 = require("../utils/json-parser.util");
 let LLMService = LLMService_1 = class LLMService {
@@ -23,9 +24,11 @@ let LLMService = LLMService_1 = class LLMService {
             process.env.BEDROCK_MODEL_ID || 'us.amazon.nova-pro-v1:0';
         this.client = new client_bedrock_runtime_1.BedrockRuntimeClient({
             region,
-            requestHandler: {
-                requestTimeout: 60_000,
-            },
+            requestHandler: new node_http_handler_1.NodeHttpHandler({
+                connectionTimeout: 10_000,
+                requestTimeout: 180_000,
+                socketTimeout: 180_000,
+            }),
         });
         this.logger.log(`Bedrock LLM Service initialized (region: ${region}, model: ${this.modelId})`);
     }
@@ -47,9 +50,7 @@ let LLMService = LLMService_1 = class LLMService {
                     maxTokens,
                 },
             });
-            const response = await this.client.send(command, {
-                requestTimeout: 60_000,
-            });
+            const response = await this.client.send(command);
             const text = response.output?.message?.content?.[0]?.text;
             if (!text) {
                 throw new Error(`Empty response from Bedrock: stopReason=${response.stopReason}, usage=${JSON.stringify(response.usage)}`);

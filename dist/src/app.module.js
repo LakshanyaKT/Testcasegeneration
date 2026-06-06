@@ -14,20 +14,24 @@ const document_understanding_module_1 = require("./document-understanding/docume
 const analysis_module_1 = require("./analysis/analysis.module");
 const clarification_module_1 = require("./clarification/clarification.module");
 const agents_module_1 = require("./agents/agents.module");
+const frs_upload_module_1 = require("./frs-upload/frs-upload.module");
+const test_case_types_module_1 = require("./test-case-types/test-case-types.module");
+const test_scripts_module_1 = require("./test-scripts/test-scripts.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            config_1.ConfigModule.forRoot({
-                isGlobal: true,
-            }),
+            config_1.ConfigModule.forRoot({ isGlobal: true }),
             mongoose_1.MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb://localhost:27017/document-understanding'),
             document_understanding_module_1.DocumentUnderstandingModule,
             analysis_module_1.AnalysisModule,
             clarification_module_1.ClarificationModule,
             agents_module_1.AgentsModule,
+            frs_upload_module_1.FrsUploadModule,
+            test_case_types_module_1.TestCaseTypesModule,
+            test_scripts_module_1.TestScriptsModule,
         ],
     })
 ], AppModule);

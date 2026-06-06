@@ -28,7 +28,7 @@ exports.ClarificationModule = ClarificationModule = __decorate([
         ],
         controllers: [clarification_controller_1.ClarificationController],
         providers: [clarification_service_1.ClarificationService, clarification_repository_1.ClarificationRepository, llm_service_1.LLMService],
-        exports: [clarification_service_1.ClarificationService],
+        exports: [clarification_service_1.ClarificationService, clarification_repository_1.ClarificationRepository],
     })
 ], ClarificationModule);
 //# sourceMappingURL=clarification.module.js.map

@@ -40,6 +40,40 @@ let ClarificationRepository = ClarificationRepository_1 = class ClarificationRep
             .sort({ createdAt: 1 })
             .exec();
     }
+    async findPendingByDocumentId(documentId) {
+        return this.clarificationModel
+            .find({ documentId, status: clarification_schema_1.ClarificationStatus.PENDING })
+            .sort({ createdAt: 1 })
+            .exec();
+    }
+    async findPrioritizedByDocumentId(documentId, batchId) {
+        return this.clarificationModel
+            .find({ documentId, priorityBatch: batchId, status: clarification_schema_1.ClarificationStatus.PENDING })
+            .sort({ priorityRank: 1 })
+            .exec();
+    }
+    async findLatestPrioritizedBatch(documentId) {
+        const latest = await this.clarificationModel
+            .findOne({ documentId, priorityBatch: { $ne: null } })
+            .sort({ updatedAt: -1 })
+            .exec();
+        if (!latest?.priorityBatch)
+            return [];
+        return this.clarificationModel
+            .find({
+            documentId,
+            priorityBatch: latest.priorityBatch,
+            status: clarification_schema_1.ClarificationStatus.PENDING,
+        })
+            .sort({ priorityRank: 1 })
+            .exec();
+    }
+    async findResolvedByDocumentId(documentId) {
+        return this.clarificationModel
+            .find({ documentId, status: clarification_schema_1.ClarificationStatus.RESOLVED })
+            .sort({ updatedAt: 1 })
+            .exec();
+    }
     async findById(clarificationId) {
         return this.clarificationModel.findOne({ clarificationId }).exec();
     }
@@ -48,6 +82,21 @@ let ClarificationRepository = ClarificationRepository_1 = class ClarificationRep
     }
     async markResolved(clarificationId) {
         return this.clarificationModel.findOneAndUpdate({ clarificationId }, { status: clarification_schema_1.ClarificationStatus.RESOLVED }, { new: true }).exec();
+    }
+    async applyPriorityRanks(ranks) {
+        const ops = ranks.map((r) => ({
+            updateOne: {
+                filter: { clarificationId: r.clarificationId },
+                update: {
+                    $set: {
+                        priorityRank: r.priorityRank,
+                        priorityBatch: r.priorityBatch,
+                        priorityReason: r.priorityReason,
+                    },
+                },
+            },
+        }));
+        await this.clarificationModel.bulkWrite(ops);
     }
 };
 exports.ClarificationRepository = ClarificationRepository;

@@ -24,14 +24,21 @@ let ClarificationController = ClarificationController_1 = class ClarificationCon
         this.logger = new common_1.Logger(ClarificationController_1.name);
     }
     async generateClarifications(documentId) {
-        this.logger.log(`Generating clarifications for document: ${documentId}`);
         return this.clarificationService.generateClarifications(documentId);
+    }
+    async prioritizeClarifications(documentId, topK) {
+        const k = topK ? parseInt(topK, 10) : 3;
+        this.logger.log(`Prioritize clarifications for: ${documentId}, topK: ${k}`);
+        return this.clarificationService.prioritizeClarifications(documentId, k);
+    }
+    async getPrioritizedClarifications(documentId) {
+        return this.clarificationService.getPrioritizedClarifications(documentId);
     }
     async getClarifications(documentId) {
         return this.clarificationService.getClarifications(documentId);
     }
     async respondToClarification(clarificationId, dto) {
-        this.logger.log(`Processing answer for clarification: ${clarificationId}`);
+        this.logger.log(`Respond to clarification: ${clarificationId}`);
         return this.clarificationService.respondToClarification(clarificationId, dto.answer);
     }
 };
@@ -40,38 +47,61 @@ __decorate([
     (0, common_1.Post)(':documentId/generate'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({
-        summary: 'Generate clarification questions for a document',
-        description: 'Reads the document understanding analysis, extracts missing information items, and uses Claude to generate targeted clarification questions. Questions are stored as PENDING in MongoDB.',
+        summary: 'Generate clarification questions',
+        description: 'Reads missingInformation from document_understanding, calls Claude, stores all as PENDING.',
     }),
     (0, swagger_1.ApiParam)({ name: 'documentId', example: 'DOC001' }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Clarification questions generated and stored',
-        type: dto_1.GenerateClarificationsResponseDto,
-    }),
-    (0, swagger_1.ApiResponse)({
-        status: 404,
-        description: 'No analysis found — run document analysis first',
-    }),
-    (0, swagger_1.ApiResponse)({ status: 500, description: 'Internal server error' }),
+    (0, swagger_1.ApiResponse)({ status: 200, type: dto_1.GenerateClarificationsResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'Analysis not found' }),
     __param(0, (0, common_1.Param)('documentId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], ClarificationController.prototype, "generateClarifications", null);
 __decorate([
+    (0, common_1.Post)(':documentId/prioritize'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({
+        summary: 'AI-rank and select top-K clarification questions',
+        description: 'Claude scores ALL PENDING questions against document risk areas and workflow, ' +
+            'selects the top-K most critical, tags them with priorityRank/priorityBatch/priorityReason. ' +
+            'Default topK=3. Use GET /clarifications/:documentId/prioritized to retrieve them.',
+    }),
+    (0, swagger_1.ApiParam)({ name: 'documentId', example: 'DOC001' }),
+    (0, swagger_1.ApiQuery)({ name: 'topK', required: false, example: 3, description: 'How many top questions to surface (default 3)' }),
+    (0, swagger_1.ApiResponse)({ status: 200, type: dto_1.PrioritizeClarificationsResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'No PENDING questions found' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'Analysis not found' }),
+    __param(0, (0, common_1.Param)('documentId')),
+    __param(1, (0, common_1.Query)('topK')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], ClarificationController.prototype, "prioritizeClarifications", null);
+__decorate([
+    (0, common_1.Get)(':documentId/prioritized'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Get top-priority clarification questions',
+        description: 'Returns the most recent priority batch — the questions to present to the user.',
+    }),
+    (0, swagger_1.ApiParam)({ name: 'documentId', example: 'DOC001' }),
+    (0, swagger_1.ApiResponse)({ status: 200, type: dto_1.GetPrioritizedClarificationsResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'No prioritized batch found — run prioritize first' }),
+    __param(0, (0, common_1.Param)('documentId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], ClarificationController.prototype, "getPrioritizedClarifications", null);
+__decorate([
     (0, common_1.Get)(':documentId'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({
         summary: 'Get all clarifications for a document',
-        description: 'Retrieves all clarification questions (PENDING, ANSWERED, RESOLVED, REJECTED) for the given document ID.',
+        description: 'Returns all records across all statuses.',
     }),
     (0, swagger_1.ApiParam)({ name: 'documentId', example: 'DOC001' }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Clarifications retrieved successfully',
-        type: dto_1.GetClarificationsResponseDto,
-    }),
+    (0, swagger_1.ApiResponse)({ status: 200, type: dto_1.GetClarificationsResponseDto }),
     __param(0, (0, common_1.Param)('documentId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -82,25 +112,13 @@ __decorate([
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({
         summary: 'Answer a clarification question',
-        description: 'Submits an answer to a clarification question. After saving the answer, re-runs Claude document understanding to update the analysis incorporating the new information. Marks the clarification as RESOLVED.',
+        description: 'Saves answer (ANSWERED), re-runs Claude to update document_understanding, marks RESOLVED. Returns resolved clarification + updated analysis.',
     }),
-    (0, swagger_1.ApiParam)({
-        name: 'clarificationId',
-        example: 'CLR-DOC001-1717406400000-0',
-        description: 'The clarificationId field of the clarification record',
-    }),
+    (0, swagger_1.ApiParam)({ name: 'clarificationId', example: 'CLR-DOC001-1717406400000-0' }),
     (0, swagger_1.ApiBody)({ type: dto_1.RespondClarificationDto }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Answer recorded and document analysis updated',
-        type: dto_1.RespondClarificationResponseDto,
-    }),
-    (0, swagger_1.ApiResponse)({
-        status: 400,
-        description: 'Clarification is already RESOLVED or REJECTED',
-    }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'Clarification not found' }),
-    (0, swagger_1.ApiResponse)({ status: 500, description: 'Internal server error' }),
+    (0, swagger_1.ApiResponse)({ status: 200, type: dto_1.RespondClarificationResponseDto }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Already RESOLVED or REJECTED' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'Not found' }),
     __param(0, (0, common_1.Param)('clarificationId')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
